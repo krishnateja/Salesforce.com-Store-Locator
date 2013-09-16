@@ -1,0 +1,467 @@
+<apex:page showHeader="false" controller="Locations">
+
+<style type="text/css">
+        body {
+            background-color:{!bg};
+        }
+
+        #mapDiv {
+            width: 1024px;
+            display: block;
+            float: left;
+            height:400px;
+            overflow:hidden;
+        }
+        #mapDiv1 {
+            width: 800px;
+            display: block;
+            overflow:hidden;
+            margin-left:215px;
+            position:relative;
+        }
+        #loadingDiv {
+            background-color: #ccc;
+            width: 900px;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        
+        #map_canvas{
+            width: 900px;
+            margin-left: 400px;
+            display: block;
+           /* right:900px; */
+            overflow:hidden;
+        }
+        
+        #loadingDiv div#progress {
+            position: absolute;
+            width: 700px;
+            margin-top:200px;
+            margin-left:100px;
+            text-align: center;
+        }
+        #loadingDiv div#progress_box p#progress_par {
+            font-weight: bold;
+        }
+        #loadingDiv div#progress_box {
+            width: 700px;
+            height: 14px;
+            border: 1px solid #55f;
+        }
+        #loadingDiv div#progress_controll {
+            overflow: hidden;
+            width: 0;
+            height: 14px;
+        }
+        #legend{ 
+            width: 500px;
+            display: block;
+            float: left;
+            padding-left: 10px;
+        }
+        #locationList > table {
+         
+                background: none repeat scroll 0 0 #CCCCCC;
+                
+                width: 203px;
+                    
+                }
+                #locationList {
+                    margin-top: 68px !important;
+                    position: absolute;
+                }
+    
+</style>
+<div style="margin:0px auto !important;width:1024px !important;">
+<table>
+<tr>
+                <td colspan="3"><!-- <img src="{!$Resource.UCIBanner}"/> -->
+                
+                <apex:image url="{!header}" />
+                </td>
+            </tr>
+            </table>
+            
+<apex:form id="locationsList">
+
+    <div id="locationList">
+    <!-- List of All the Locations -->
+   
+        <apex:repeat value="{!sl}" var="s">  
+      
+          
+              <table>
+              <tr><td>
+              <apex:image url="{!marker}"/> </td>
+              
+              <td>
+              
+            <table>
+                   <tr>
+               <td>  <apex:outputText value="{!s.Name}" /></td>
+                    </tr>
+             <tr><td>   <apex:outputText value="{!s.State__c}" /></td></tr>
+             <tr><td>   <apex:outputText value="{!s.City__c}" /></td></tr>
+              <tr><td>  <apex:outputText value="{!s.Street__c}" /></td></tr>
+               <tr><td>   <apex:outputText value="{!s.Zip_Code__c}" /></td></tr>
+               </table>
+               
+                 </td></tr> 
+                 </table>
+              
+        </apex:repeat>
+        
+    </div>
+    
+</apex:form>
+<!--<apex:image url="{!header}" />-->
+<apex:form >
+<div style="margin-left:0px; margin-top:30px;position:relative;"> 
+
+    <div id="filter" style="height:30px;">    <!-- Country/State/City Text Boxes -->        
+        Country: <apex:inputText id="country" value="{!Country}">
+            <c:SSEStoreLocator autocomplete_textbox="{!$Component.country}" objectname="Store_Location__c" />
+        </apex:inputText>
+        State: <apex:inputText value="{!State}"/>
+        City: <apex:inputText value="{!City}"/>
+        Distance: <apex:selectList value="{!select1}" multiselect="false" size="1">
+        <apex:selectOptions value="{!Opt}" />
+            </apex:selectList>
+        <apex:commandButton value="Done" action="{!getDistance}" onComplete="checkJson('{!select1}')" rerender="locationsList"/>
+    </div>
+
+
+ 
+        <div id="mapDiv"></div>
+        <div id="mapDiv1"></div>
+        <div id="map_canvas"></div>
+    <div id="loadingDiv">
+            <div id="progress">
+                <p>Loading:<span id="progress_par">0</span>%</p>
+                <div id="progress_box">
+                    <div id="progress_controll">
+                        <apex:image url="{!$Resource.progress_bar}"/>
+                    </div>
+                </div>
+            </div>
+        </div>
+</div>
+ <apex:image url="{!footer}" style="margin-top:10px;"/>        
+<script src="https://maps.googleapis.com/maps/api/js?v=3.exp&sensor=true"></script>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.1/jquery.min.js"></script>
+<script src="/soap/ajax/22.0/connection.js" type="text/javascript" />
+<script type="text/javascript" >
+
+sforce.connection.sessionId = '{!$Api.Session_ID}';
+ 
+var latlng = null;
+var vst=new Boolean();
+var watchProcess = null;
+var map = null;
+var fromDate = null;
+var myTasks = [];
+var geocoder = new google.maps.Geocoder();
+var iterator = 0;
+var directionDisplay;
+var directionsService = new google.maps.DirectionsService();
+var openInfowindow = null;
+var userId = null;
+userId = '{!$User.id}';
+
+
+</script>
+<script type="text/javascript">
+
+    var pos1 = {};
+var latJS1;var lonJS1;
+
+  
+function success1(position) {
+  pos1 = position.coords;
+  latJS1 = position.coords.latitude;
+  lonJS1 = position.coords.longitude;
+  //latJS1 = '17.36665';
+  //lonJS1='78.52669';
+  console.log(pos1);
+}
+ 
+function error1(msg) {
+ console.log(msg);
+}
+ 
+if (navigator.geolocation) {
+  navigator.geolocation.getCurrentPosition(success1, error1);
+} else {
+  error('not supported');
+}
+
+    var myMap={};
+    var jString;
+    var allLatLon = [];
+    
+        var addresses = [
+            <apex:repeat value="{!dataSet}" var="d">
+                {id: '{!d.iID}', name: '{!d.iName}',post: '{!d.BillingZip}', address: '{!d.BillingState} {!d.BillingCity} {!d.BillingStreet}', icon: '{!d.Marker}'},
+            </apex:repeat>
+        ];
+        function initialize() {
+            var myOptions = {
+                zoom: 8,
+                mapTypeId: google.maps.MapTypeId.ROADMAP
+            };
+
+            var map = new google.maps.Map(document.getElementById('mapDiv'), myOptions);
+            var geo = new google.maps.Geocoder();
+            var set_center = 0;
+            var l=0;
+            each_wait(addresses, 500, function(a) { 
+                            
+                geo.geocode({'address': a.address}, function(results, status) {
+                    if (status == google.maps.GeocoderStatus.OK) {                        
+                        var position = results[0].geometry.location;
+                        a.position = position;
+                        
+                        allLatLon.push(position.lat());
+                        allLatLon.push(position.lng());
+                        allLatLon.push(a.name);
+                       
+                        
+                         l++;
+                        
+                        if (set_center == 0) {
+                            map.setCenter(new google.maps.LatLng(latJS1,lonJS1));
+                            set_center = 1;
+                        }
+                        var marker = new google.maps.Marker({
+                            map: map, 
+                            icon: a.icon,
+                            position: position
+                        });
+                        var marker1 = new google.maps.Marker({
+                            map: map, 
+                            icon: '{!marker}',
+                            position: new google.maps.LatLng(latJS1,lonJS1)
+                        });
+                        var contentString='Address: '+'<div><table><tr><td>'+a.name+'</td></tr>'+'<tr><td>'+a.address+'</td></tr><tr><td>'+a.post+'</td></tr></table></div>';
+                        var infowindow = new google.maps.InfoWindow({
+                            //content: '<a href="/' + a.id + '">' + a.name + '</a>'
+                            content:contentString
+                        });
+                        var infowindow1 = new google.maps.InfoWindow({
+                            content:   'Current Location' 
+                        });
+                        google.maps.event.addListener(marker, 'click', function() {
+                            infowindow.open(map,marker);
+                        });
+                        google.maps.event.addListener(marker1, 'click', function() {
+                            infowindow1.open(map,marker1);
+                        });
+                    } else {
+                        alert("Geocode was not successful for the following reason: " + address + "[" + status + "]");
+                    }
+                });
+            }, function(i, all) {
+                var progress_width = 190;
+                var width = Math.floor(progress_width * (i + 1) / all);
+                var par = Math.floor(i * 100 / all);
+                document.getElementById("progress_controll").style.width = width + 'px';
+                document.getElementById("progress_par").innerHTML = par;
+            }, function() {
+                document.getElementById("loadingDiv").style.display = 'none';
+            });
+            return map;
+        }
+
+        function each_wait(array, time, callback, callback_loading, callback_finally) {
+            var i = 0;
+            var timer = setInterval(
+                function() {
+                    callback(array[i]);
+                    
+                    callback_loading(i, array.length);
+                    if (++i == array.length) {
+                        clearInterval(timer);
+                        callback_finally();
+                    }
+                }, time
+            );
+        }
+        function moveCenter(id) {
+            for (var i = 0; i < addresses.length; i++) {
+                if (addresses[i].id == id) {
+                    if (typeof addresses[i].position !== 'undefined') {
+                        map.setCenter(addresses[i].position);
+                    }
+                }
+            }
+        }
+
+        google.maps.event.addDomListener(window, 'load', initialize);
+</script> 
+<script type="text/javascript">
+var dist;
+var pos = {};
+var latJS;var lonJS;
+function success(position) {
+  pos = position.coords;
+  latJS = position.coords.latitude;
+  lonJS = position.coords.longitude;
+  //latJS = '17.36665';
+  //lonJS='78.52669';
+  console.log(pos);
+}
+ 
+function error(msg) {
+ console.log(msg);
+}
+ 
+if (navigator.geolocation) {
+  navigator.geolocation.getCurrentPosition(success, error);
+} else {
+  error('not supported');
+}
+function checkJson(distance){
+  console.log('distance is'+distance);
+
+    var distanceArr=[];
+    var mapStr = [];
+    var myTasks = [];
+    var geocoder = new google.maps.Geocoder();
+    var map = null;
+    var openInfowindow = null;
+    
+    document.getElementById("mapDiv").style.display = 'none';
+    document.getElementById("mapDiv1").style.display = 'block';
+    document.getElementById("mapDiv1").style.height = '400px';
+    document.getElementById("map_canvas").style.display = 'none';
+     
+    for (var i=0;i<allLatLon.length;i++){                            
+        var R = 6371;                
+        var lat1=latJS; var lon1=lonJS;
+                  
+        var dLat = toRad(allLatLon[i]-lat1);
+        var dLon = toRad(allLatLon[i+1]-lon1);
+               
+        lat1 = toRad(lat1);
+        lat2 = toRad(allLatLon[i]);
+        var a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.sin(dLon/2) * Math.sin(dLon/2) * Math.cos(lat1) * Math.cos(lat2); 
+        var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+        var d = R * c;
+                
+        distanceArr.push(d);
+        console.log('Distance is'+d);
+               
+        i++;i++;
+    }
+    
+    var myOptions = {
+        zoom: 8,
+        scrollwheel: true,
+        mapTypeId: google.maps.MapTypeId.ROADMAP
+    };
+    
+    map = new google.maps.Map(document.getElementById("mapDiv1"), myOptions);    
+    sforce.connection.sessionId = '{!$Api.Session_ID}';
+    
+    var query = 'select Name,State__c,City__c,Street__c,Zip_Code__c,ID From Store_Location__c';
+    //var query1=query
+    console.log(query);
+                    
+    var qr = sforce.connection.query(query);
+    var tasks = qr.getArray('records');  
+    iterator = 0;
+
+    for(var i = 0; i < tasks.length; i++){ 
+        myTasks[i] = tasks[i];  
+        var address = '' + tasks[i].Street__c + ', ' + tasks[i].Zip_Code__c + ' ' + tasks[i].City__c + ', ' + tasks[i].Name + '';
+        var set_center = 0;
+        if(distanceArr[i]<=distance){
+            geocoder.geocode( {'address': address}, function(results, status) {                       
+                if (status == google.maps.GeocoderStatus.OK) {
+                    var myAddress = '' + myTasks[iterator].Street__c + ', ' + myTasks[iterator].Zip_Code__c + ' ' + myTasks[iterator].City__c + ', ' + myTasks[iterator].Name + '';
+                    if(myTasks[iterator].Street__c == null) {
+                        myAddress = '' + myTasks[iterator].Zip_Code__c + ' ' + myTasks[iterator].City__c + ', ' + myTasks[iterator].Name + '';
+                    }
+                    var contentString = '<div class="infoWindow">'+
+                                        '<table>' +
+                                        '<tr><td><b>Store Address:</b></td><td>'+ myAddress +' </td></tr></table></div>';   
+
+                    var infowindow = new google.maps.InfoWindow({
+                                        content: contentString
+                                    });
+                    if (set_center == 0) {
+                        map.setCenter(results[0].geometry.location);
+                        set_center = 1;
+                    }
+                    
+                    var marker = new google.maps.Marker({
+                                    map: map,
+                                    position: results[0].geometry.location,
+                                    setAnimation: google.maps.Animation.DROP,
+                                    icon: 'http://chart.apis.google.com/chart?chst=d_map_pin_letter&chld=' + String.fromCharCode(65 + iterator) + '|FF776B|000000'
+                                    });
+                                    
+                    google.maps.event.addListener(marker, 'click', function() {
+                        if(openInfowindow != null) {
+                            openInfowindow.close();
+                        }
+                        infowindow.open(map,marker);
+                        openInfowindow = infowindow;
+                                        
+                    });
+                    iterator++; 
+
+                } else {
+                    //alert("Le Geocode est en echec pour la raison suivante: " + status);
+                }
+
+            });
+                      
+        }else{                     
+            var mapProp = { center:new google.maps.LatLng(latJS1,lonJS1),
+        zoom:5,
+                              mapTypeId:google.maps.MapTypeId.ROADMAP
+                              };
+                              
+                        map=new google.maps.Map(document.getElementById("mapDiv1"),mapProp);
+                        
+                        var infowindow2 = new google.maps.InfoWindow({
+                                        content: 'No Locations'
+                                    });
+                              var marker2 = new google.maps.Marker({
+                            map: map, 
+                            //icon: 'http://chart.apis.google.com/chart?chst=d_map_pin_letter&chld=1|FF776B|000000',
+                            icon: '{!marker}',
+                            position: new google.maps.LatLng(latJS1,lonJS1)
+                        });
+                        google.maps.event.addListener(marker2, 'click', function() {
+                                        
+                                        infowindow2.open(map,marker2);
+                                       
+                                        
+                                    });
+                      }
+
+
+                     }
+//End of Query to fetch records - Version latest
+    
+
+          
+
+}
+
+function toRad(Value) {
+    /** Converts numeric degrees to radians */
+    return Value * Math.PI / 180;
+}
+</script> 
+ 
+
+ 
+
+</apex:form>
+</div>
+</apex:page>

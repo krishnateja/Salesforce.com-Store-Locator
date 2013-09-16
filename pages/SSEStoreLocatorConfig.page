@@ -1,0 +1,53 @@
+<apex:page controller="SSEStoreLocatorRemoting" setup="true">
+
+    <script>
+    function checkColor(){
+        
+        var pkr = document.getElementsByClassName('colorPickr');
+        var param2 = document.getElementById('header').value;
+        var param4 = document.getElementById('footer').value;
+        var param3 = document.getElementById('markr').value;
+        SSEStoreLocatorRemoting.saveConfig( pkr[0].value,param2,param3,param4, function(result, event){
+            if (event.status){
+                window.location.href='/apex/SSEStoreLocatorConfig';   
+            }
+        }, {escape:true});
+        
+    }
+    </script>
+    
+    <apex:sectionHeader title="Configuration"
+      subtitle="Store Locator"
+      description="Store Locator guides the user by showing up all the stores with in the radius chosen by the user. This component is customizable to an extent that we can do simple branding and also we can customize the map marker" />
+
+
+    <apex:form >
+    <apex:pageBlock >
+        <table>
+            <tr>
+                <td>
+        Header : </td><td><input type="text" id="header" size="70"/> 
+                </td>
+            </tr>
+            <tr>
+                <td>    
+        Footer : </td><td><input type="text" id="footer" size="70"/>
+                </td>
+            </tr>
+            <tr>
+                <td>        
+        Marker : </td><td><input type="text" id="markr" size="70"/>
+                </td>
+            </tr>
+            <tr>
+                <td>
+        Color Pickr : </td><td><input type="color" id="colorPickr" name="favcolor" class="colorPickr"/>
+                </td>
+            </tr>
+            
+            </table>
+        <input type="button" value="save" onClick="checkColor();" />
+    </apex:pageBlock>
+    
+    </apex:form>  
+</apex:page>
